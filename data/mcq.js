@@ -1,0 +1,31 @@
+export const QUIZ = {
+    version: 1,               // tăng số này khi thay đổi bộ câu hỏi
+    perAttemptCount: 20,      // số câu lấy cho mỗi thí sinh
+    pointsPerCorrect: 2,    
+    questions: [
+        { id: 'Q1', text: 'Đồng Nai thuộc vùng kinh tế nào của Việt Nam?', choices: ['Tây Nguyên', 'Đông Nam Bộ', 'Đồng bằng Sông Hồng', 'Duyên hải Nam Trung Bộ'], answerIndex: 1 },
+        { id: 'Q2', text: 'Thành phố là trung tâm hành chính của tỉnh Đồng Nai?', choices: ['Long Khánh', 'Biên Hòa', 'Nhơn Trạch', 'Long Thành'], answerIndex: 1 },
+        { id: 'Q3', text: 'Cảng hàng không lớn đang xây dựng tại Đồng Nai là?', choices: ['Tân Sơn Nhất', 'Long Thành', 'Liên Khương', 'Cần Thơ'], answerIndex: 1 },
+        { id: 'Q4', text: 'Sông lớn chảy qua Đồng Nai là?', choices: ['Sông Cả', 'Sông Đà', 'Sông Đồng Nai', 'Sông Ba'], answerIndex: 2 },
+        { id: 'Q5', text: 'Đối ngoại nhân dân nhằm tăng cường điều gì?', choices: ['Cấm vận', 'Hiểu biết, hữu nghị', 'Đóng cửa thị trường', 'Giảm giao lưu'], answerIndex: 1 },
+        { id: 'Q6', text: 'Chủ thể chính của đối ngoại nhân dân là?', choices: ['Nhân dân, tổ chức xã hội', 'Quân đội', 'Doanh nghiệp nước ngoài', 'Cơ quan tư pháp'], answerIndex: 0 },
+        { id: 'Q7', text: 'Một hình thức phổ biến của đối ngoại nhân dân?', choices: ['Trao đổi đoàn, giao lưu văn hoá', 'Đóng cửa biên giới', 'Ngừng viện trợ', 'Cắt đứt liên lạc'], answerIndex: 0 },
+        { id: 'Q8', text: 'Di tích nổi tiếng ở Đồng Nai?', choices: ['Văn Miếu Quốc Tử Giám', 'Căn cứ Chiến khu Đ', 'Hoàng thành Huế', 'Tháp Bà Ponagar'], answerIndex: 1 },
+        { id: 'Q9', text: 'Khu công nghiệp nổi bật của Đồng Nai?', choices: ['VSIP Hải Phòng', 'Biên Hòa 1/2', 'Tân Thuận', 'Hòa Lạc'], answerIndex: 1 },
+        { id: 'Q10', text: 'Mục tiêu của ngoại giao văn hoá ở địa phương?', choices: ['Bế quan tỏa cảng', 'Quảng bá hình ảnh, thu hút hợp tác', 'Giảm du lịch', 'Giảm đầu tư'], answerIndex: 1 },
+        { id: 'Q11', text: 'Tổ chức hoà bình, hữu nghị của Việt Nam là?', choices: ['VUSTA', 'VCCI', 'VUFO', 'VFF'], answerIndex: 2 },
+        { id: 'Q12', text: 'Biểu tượng đặc trưng thiên nhiên Đồng Nai?', choices: ['Rừng Mã Đà – Vườn Quốc gia Cát Tiên', 'Ruộng bậc thang Mù Cang Chải', 'Động Phong Nha', 'Thác Bản Giốc'], answerIndex: 0 },
+        { id: 'Q13', text: 'Hoạt động nào góp phần “ngoại giao nhân dân” hiệu quả?', choices: ['Chia sẻ thông tin sai lệch', 'Kết nghĩa địa phương, giao lưu nhân dân', 'Kích động xung đột', 'Tẩy chay hợp tác'], answerIndex: 1 },
+        { id: 'Q14', text: 'Đồng Nai giáp thành phố nào?', choices: ['Đà Nẵng', 'Hà Nội', 'TP. Hồ Chí Minh', 'Cần Thơ'], answerIndex: 2 },
+        { id: 'Q15', text: 'Một lợi thế của Đồng Nai trong thu hút đầu tư?', choices: ['Xa trung tâm', 'Hạ tầng kết nối vùng tốt', 'Thiếu lao động', 'Thiếu KCN'], answerIndex: 1 },
+        { id: 'Q16', text: 'Đối ngoại nhân dân có vai trò gì với hoà bình?', choices: ['Gây căng thẳng', 'Xây dựng lòng tin, hữu nghị', 'Khuyến khích xung đột', 'Cô lập đối tác'], answerIndex: 1 },
+        { id: 'Q17', text: 'Một sản phẩm nông nghiệp tiêu biểu Đồng Nai:', choices: ['Cà phê Buôn Ma Thuột', 'Thanh long Bình Thuận', 'Cao su, chăn nuôi heo', 'Nước mắm Phú Quốc'], answerIndex: 2 },
+        { id: 'Q18', text: 'Kênh truyền thông an toàn khi quảng bá đối ngoại?', choices: ['Tin giả', 'Kênh chính thống & hợp tác quốc tế', 'Tài khoản ẩn danh', 'Spam'], answerIndex: 1 },
+        { id: 'Q19', text: 'Sự kiện nào phù hợp ngoại giao nhân dân?', choices: ['Tuần lễ văn hoá – du lịch', 'Cấm du lịch', 'Ngừng hội chợ', 'Đóng cửa triển lãm'], answerIndex: 0 },
+        { id: 'Q20', text: 'Giới hạn số lần nộp tự luận theo thể lệ demo?', choices: ['1 lần', '2 lần', '3 lần', 'Không giới hạn'], answerIndex: 2 },
+        { id: 'Q21', text: 'Điểm tối đa phần trắc nghiệm trong hệ quy chiếu này?', choices: ['20', '30', '40', '60'], answerIndex: 2 },
+        { id: 'Q22', text: 'Điểm tối đa phần tự luận trong hệ quy chiếu này?', choices: ['20', '40', '60', '80'], answerIndex: 2 },
+        { id: 'Q23', text: 'Tổng điểm tối đa của bài thi?', choices: ['60', '80', '90', '100'], answerIndex: 3 },
+        { id: 'Q24', text: 'Mục tiêu “ngăn gian lận” của phần trắc nghiệm?', choices: ['Hiển thị cố định mỗi thí sinh', 'Xáo trộn câu hỏi & đáp án theo từng thí sinh', 'Công khai đáp án trước', 'Cho làm lại nhiều lần'], answerIndex: 1 },
+    ],
+};

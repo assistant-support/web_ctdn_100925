@@ -1,0 +1,29 @@
+{
+  "name": "my-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build --turbopack",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@auth/mongodb-adapter": "^3.10.0",
+    "bcryptjs": "^3.0.2",
+    "crypto": "^1.0.1",
+    "googleapis": "^159.0.0",
+    "lucide-react": "^0.544.0",
+    "mongodb": "^6.19.0",
+    "mongoose": "^8.18.1",
+    "next": "15.5.3",
+    "next-auth": "^5.0.0-beta.29",
+    "nodemailer": "^6.10.1",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "zod": "^4.1.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "tailwindcss": "^4"
+  }
+}

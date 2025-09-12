@@ -1,0 +1,84 @@
+/* Tailwind v4 */
+@import "tailwindcss";
+
+/* 1) Khai báo màu thương hiệu bằng @theme -> tự có bg-brand, text-brand, ring-brand... */
+@theme {
+  --color-brand: #00a3e4;
+  --color-brand-700: #008ac0;
+}
+
+/* 2) Base: thêm scroll mượt (tùy chọn) */
+@layer base {
+  html {
+    @apply scroll-smooth;
+  }
+}
+
+/* 3) Components: gom các class tùy biến dùng @apply (chỉ apply utility của Tailwind) */
+@layer components {
+
+  /* Buttons chung */
+  .btn-brand {
+    @apply inline-flex items-center rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:opacity-95 active:scale-[.99] transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand;
+  }
+
+  .btn-outline {
+    @apply inline-flex items-center rounded-lg px-4 py-2 text-sm font-semibold ring-1 ring-slate-300 hover:bg-slate-50 active:scale-[.99] transition;
+  }
+
+  /* Buttons dùng trong hero (nền màu) */
+  .btn-hero {
+    @apply inline-flex items-center rounded-lg bg-white text-brand px-5 py-2.5 text-sm font-semibold shadow-md hover:bg-slate-100 active:scale-[.99] transition;
+  }
+
+  .btn-hero-outline {
+    @apply inline-flex items-center rounded-lg bg-transparent text-white/95 ring-1 ring-white/60 px-5 py-2.5 text-sm font-semibold hover:bg-white/10 active:scale-[.99] transition;
+  }
+
+  .badge-hero {
+    @apply inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 ring-1 ring-white/20;
+  }
+
+  /* Form */
+  .inp {
+    @apply block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-brand;
+  }
+
+  .alert-error {
+    @apply rounded-md bg-red-50 px-3 py-2 text-sm text-red-700;
+  }
+
+  /* Links */
+  .link {
+    @apply hover:underline underline-offset-4;
+  }
+
+  /* Cards */
+  .center-card {
+    @apply rounded-2xl border border-black/5 bg-white p-6 text-center shadow-sm ring-1 ring-black/5 transition hover:-translate-y-0.5 hover:shadow;
+  }
+
+  .info-card {
+    @apply rounded-2xl border border-black/5 bg-white p-6 shadow-sm ring-1 ring-black/5;
+  }
+
+  /* Nav link */
+  .nav-link {
+    @apply inline-flex items-center gap-1 px-3 py-2 text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-md;
+  }
+
+  .divider-soft {
+    @apply border-b border-black/5;
+  }
+
+  .divider-top-soft {
+    @apply border-t border-black/5;
+  }
+
+  .ring-soft {
+    @apply ring-1 ring-black/5;
+  }
+}
+
+/* 4) KHÔNG cần (và KHÔNG nên) tự tạo .bg-brand, .text-brand, .ring-brand bằng CSS nữa.
+      Các utility đó đã có sẵn nhờ @theme ở trên. */
