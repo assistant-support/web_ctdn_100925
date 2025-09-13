@@ -35,7 +35,6 @@ RUN addgroup -g 1001 nodejs && adduser -S -u 1001 nextjs
 
 # assets & server
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 
 # Nếu muốn dùng file .env trong repo ở runtime (KHÔNG khuyến nghị nhúng secret):
