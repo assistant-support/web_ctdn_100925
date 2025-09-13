@@ -35,8 +35,8 @@ ENV NODE_ENV=production
 # Khớp port 4004 bạn expose
 ENV NEXTAUTH_URL="http://localhost:4004"
 ENV NEXTAUTH_SECRET="AIzaSyCQYlefMrueYu1JPWKeEdSOPpSmb9Rceg8"
-ENV AUTH_URL="http://localhost:4004"      # Cho Auth.js v5
-ENV AUTH_SECRET="AIzaSyCQYlefMrueYu1JPWKeEdSOPpSmb9Rceg8"  # Cho Auth.js v5
+ENV AUTH_URL="http://localhost:4004" 
+ENV AUTH_SECRET="AIzaSyCQYlefMrueYu1JPWKeEdSOPpSmb9Rceg8" 
 
 ENV MONGODB_URI="mongodb+srv://web_ctdn_100925:GD2zc4BuaC3IffxU@ctdn100925.llu9goc.mongodb.net/data?retryWrites=true&w=majority&appName=ctdn100925"
 
