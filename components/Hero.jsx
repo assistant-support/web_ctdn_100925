@@ -20,15 +20,15 @@ export default function Hero() {
     // Ảnh dùng URL gốc (đã đề xuất), cần cấu hình remotePatterns trong next.config.js
     const photos = {
         main: {
-            src: "https://baodongnai.com.vn/file/e7837c02876411cd0187645a2551379f/102024/1_5_20241004163331.jpg",
+            src: "https://lh3.googleusercontent.com/d/1mW37L5kMG2P9jxCGxV1uzsXWnGnAPMC5",
             alt: "Sông Đồng Nai & cây cầu bắc qua sông nhìn từ trên cao",
         },
         card1: {
-            src: "https://lhu.edu.vn/Data/News/400/images/1m.jpg",
+            src: "https://lh3.googleusercontent.com/d/16Ax1NWzRBbjHE36ozKU3V4CvmuYvjnR1",
             alt: "Phát biểu tại chương trình giao lưu Việt–Nhật 2024 (LHU)",
         },
         card2: {
-            src: "https://vietnamtimes.thoidai.com.vn/stores/news_dataimages/2024/122024/05/13/a1675568fb99b0b221da005e3f80a044.jpg?rt=20241205130623",
+            src: "https://lh3.googleusercontent.com/d/1PszbkcaEzty8F3ub87YEkIcZC6ozwsOG",
             alt: "Trao giải tại chương trình giao lưu Việt–Nhật 2024",
         },
     };

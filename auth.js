@@ -2,7 +2,6 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { authConfig } from "./auth.config.js";
-import connectDB from "./lib/mongodb.js";
 
 function maskNationalId(n) {
   const s = String(n || "").replace(/\D/g, "");
@@ -24,6 +23,7 @@ const nextAuth = NextAuth({
       },
       async authorize({ email, password }) {
         if (!email || !password) return null;
+        const { default: connectDB } = await import("./lib/mongodb.js");
         await connectDB();
 
         const [

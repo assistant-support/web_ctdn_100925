@@ -10,7 +10,6 @@ export async function getSessionUserLite() {
     const s = await auth()
     if (!s?.user) return null
     const u = s.user
-    console.log(s);
 
     return {
         id: u.id,

@@ -1,248 +1,493 @@
-// app/(exam)/thi/[id]/ExamClient.js
-'use client'
+'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { startQuizAction, saveQuizResponseAction, submitQuizAction, submitEssayAction } from './actions'
-import { ShieldAlert, Clock, FileText, PenSquare } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { heartbeatQuiz, recordQuizResponse, submitEssay, submitQuiz } from './actions';
+import { useActionFeedback } from '@/hooks/useAction';
 
-function fmtCountdown(ms) {
-    const s = Math.max(0, Math.floor(ms / 1000))
-    const mm = String(Math.floor(s / 60)).padStart(2, '0')
-    const ss = String(s % 60).padStart(2, '0')
-    return `${mm}:${ss}`
+export default function ExamClient({ entry, userId, mode }) {
+    const router = useRouter();
+
+    if (mode === 'quiz') {
+        if (entry.stage === 'submitted') {
+            return (
+                <main className="mx-auto max-w-2xl p-6">
+                    <h1 className="text-2xl font-semibold">Bạn đã nộp bài trắc nghiệm</h1>
+                    <p className="mt-4">Điểm phần trắc nghiệm: <b>{entry.score}</b> / 40</p>
+                    <div className="mt-6">
+                        <a href="/thi" className="text-brand hover:underline">Quay về trang thi</a>
+                    </div>
+                </main>
+            );
+        }
+        if (entry.stage === 'in_progress') return <QuizScreen userId={userId} data={entry.quiz} />;
+        return null;
+    }
+
+    if (mode === 'essay') {
+        // TỰ LUẬN: cho phép chuyển tab, không ép fullscreen
+        if (entry.stage === 'essay_closed') {
+            return (
+                <main className="mx-auto max-w-2xl p-6">
+                    <h1 className="text-2xl font-semibold">Phần tự luận đã kết thúc</h1>
+                    <p className="mt-4">Hạn chót đã qua.</p>
+                </main>
+            );
+        }
+        return (
+            <main className="mx-auto max-w-4xl p-6">
+                <h1 className="text-2xl font-bold">Bài tự luận</h1>
+                <p className="mt-2 text-sm">
+                    Còn lại <b>{entry.essay.attemptsLeft}</b> lượt nộp.
+                    {entry.essay.deadlineISO && <> Hạn chót: <b>{new Date(entry.essay.deadlineISO).toLocaleString()}</b>.</>}
+                </p>
+                <EssayForm
+                    userId={userId}
+                    defaultValue={entry.essay.lastContent || ''}
+                    disabled={entry.essay.attemptsLeft <= 0}
+                />
+            </main>
+        );
+    }
+
+    return null;
 }
 
-export default function ExamClient({ entry }) {
-    const router = useRouter()
+/* =========================
+ * QUIZ — 1 câu hỏi/màn hình + fixed card height (theo câu dài nhất)
+ * ========================= */
+function QuizScreen({ userId, data }) {
+    const router = useRouter();
+    const { run } = useActionFeedback();
 
-    const [started, setStarted] = useState(entry.mode === 'quiz' ? entry.status === 'in_progress' : true)
-    const [endAtISO, setEndAtISO] = useState(entry.endAt || null)
-    const [now, setNow] = useState(Date.now())
-    const [submitting, setSubmitting] = useState(false)
-    const [error, setError] = useState('')
-    const essayRef = useRef(null)
-    const submittedRef = useRef(false)
+    const MAX_TAB_VIOLATIONS = 3;           // cho phép 3 lần; lần thứ 4 auto-submit
+    const autoSubmitRef = useRef(false);     // chống submit trùng
 
-    // lưu đáp án local để phản hồi nhanh
-    const [answers, setAnswers] = useState(() => entry.selected || {})
+    const total = data.questions.length;
+    const [answers, setAnswers] = useState(
+        () => new Map((data.responses || []).map(r => [r.questionId, r.selectedIndex]))
+    );
+    const [idx, setIdx] = useState(() => {
+        const firstUn = data.questions.findIndex(q => !answers.has(q.id));
+        return firstUn >= 0 ? firstUn : 0;
+    });
+    const active = data.questions[idx];
 
-    // chống sao chép / phím tắt phổ biến
+    const endsAt = useMemo(() => (data.endsAtISO ? new Date(data.endsAtISO) : null), [data.endsAtISO]);
+    const [now, setNow] = useState(() => new Date());
+
+    // Fullscreen gate
+    const [fsRequired, setFsRequired] = useState(() => (typeof document !== 'undefined' && !document.fullscreenElement));
+
+    // Popup trung tâm (chuyển tab/printscreen)
+    const [popup, setPopup] = useState({ open: false, title: '', message: '' });
+
+    // Đếm vi phạm chuyển tab
+    const [violations, setViolations] = useState(0);
+
+    // ===== Fixed card height theo câu dài nhất =====
+    const panelRef = useRef(null);
+    const sizerRef = useRef(null);
+    const [panelWidth, setPanelWidth] = useState(0);
+    const [panelMinH, setPanelMinH] = useState(420);
+
+    // Quan sát độ rộng panel để đo lại chiều cao tối đa
     useEffect(() => {
-        const prevent = e => { e.preventDefault(); return false }
+        if (!panelRef.current) return;
+        const updateW = () => setPanelWidth(panelRef.current.offsetWidth || 0);
+        updateW();
+        const ro = new ResizeObserver(updateW);
+        ro.observe(panelRef.current);
+        return () => ro.disconnect();
+    }, []);
+
+    // Đo chiều cao tối đa dựa trên câu dài nhất (tại width hiện tại)
+    useEffect(() => {
+        if (!sizerRef.current || !panelWidth) return;
+        let maxH = 0;
+        const items = sizerRef.current.querySelectorAll('[data-sizer-item]');
+        items.forEach(el => { maxH = Math.max(maxH, el.offsetHeight); });
+        if (maxH) setPanelMinH(maxH);
+    }, [panelWidth, data.questions]);
+
+    // Tick + heartbeat
+    useEffect(() => {
+        const t = setInterval(() => setNow(new Date()), 1000);
+        const hb = setInterval(() => { heartbeatQuiz({ userId }); }, 15000);
+        return () => { clearInterval(t); clearInterval(hb); };
+    }, [userId]);
+
+    // Hết thời gian -> tự nộp
+    useEffect(() => {
+        if (endsAt && now >= endsAt) {
+            run(submitQuiz, [{ userId }], {
+                onSuccess: () => router.replace('/thi'),
+                successMessage: 'Đã tự động nộp bài khi hết thời gian.',
+            });
+        }
+    }, [now, endsAt, run, router, userId]);
+
+    // Anti-copy + phát hiện chuyển tab + theo dõi fullscreen
+    useEffect(() => {
+        const onCopy = (e) => { e.preventDefault(); };
+        const onCtx = (e) => { e.preventDefault(); };
         const onKey = (e) => {
-            const k = (e.key || '').toLowerCase()
-            if (k === 'printscreen') e.preventDefault()
-            if ((e.ctrlKey || e.metaKey) && ['c', 'u', 's', 'p', 'a', 'x'].includes(k)) e.preventDefault()
-        }
-        window.addEventListener('contextmenu', prevent, { capture: true })
-        window.addEventListener('copy', prevent, { capture: true })
-        window.addEventListener('cut', prevent, { capture: true })
-        window.addEventListener('paste', prevent, { capture: true })
-        window.addEventListener('keydown', onKey, { capture: true })
-        return () => {
-            window.removeEventListener('contextmenu', prevent, { capture: true })
-            window.removeEventListener('copy', prevent, { capture: true })
-            window.removeEventListener('cut', prevent, { capture: true })
-            window.removeEventListener('paste', prevent, { capture: true })
-            window.removeEventListener('keydown', onKey, { capture: true })
-        }
-    }, [])
-
-    // auto submit on exit
-    useEffect(() => {
-        const beacon = (mode, userId, content = '') => {
-            try {
-                const payload = JSON.stringify({ mode, userId, content })
-                navigator.sendBeacon('/api/exam/force-submit', payload)
-            } catch { }
-        }
-        const onPageHide = () => { if (!submittedRef.current) beacon(entry.mode, entry.userId, essayRef.current?.value) }
-        const onBeforeUnload = () => { if (!submittedRef.current) beacon(entry.mode, entry.userId, essayRef.current?.value) }
-        const onVisibility = () => { if (document.visibilityState === 'hidden' && !submittedRef.current) beacon(entry.mode, entry.userId, essayRef.current?.value) }
-
-        window.addEventListener('pagehide', onPageHide)
-        window.addEventListener('beforeunload', onBeforeUnload)
-        document.addEventListener('visibilitychange', onVisibility)
-        return () => {
-            window.removeEventListener('pagehide', onPageHide)
-            window.removeEventListener('beforeunload', onBeforeUnload)
-            document.removeEventListener('visibilitychange', onVisibility)
-        }
-    }, [entry?.mode, entry?.userId])
-
-    // đếm ngược
-    useEffect(() => {
-        if (!endAtISO) return
-        const t = setInterval(() => setNow(Date.now()), 1000)
-        return () => clearInterval(t)
-    }, [endAtISO])
-    const timeLeft = useMemo(() => {
-        if (!endAtISO) return 0
-        const end = new Date(endAtISO).getTime()
-        return Math.max(0, end - now)
-    }, [endAtISO, now])
-    useEffect(() => {
-        if (entry.mode === 'quiz' && endAtISO && timeLeft <= 0 && !submittedRef.current) {
-            onSubmit()
-        }
-    }, [timeLeft, endAtISO, entry.mode])
-
-    async function onStartQuiz() {
-        setError('')
-        const fd = new FormData()
-        fd.set('userId', entry.userId)
-        fd.set('seed', JSON.stringify(entry.seed || {}))
-        const res = await startQuizAction(null, fd)
-        if (res?.ok) {
-            setEndAtISO(res.endAt)
-            setStarted(true)
-        } else {
-            setError(res?.error || 'Không thể bắt đầu bài thi.')
-        }
-    }
-
-    async function onChangeAnswer(qid, idx) {
-        setAnswers(prev => ({ ...prev, [qid]: idx }))
-        const fd = new FormData()
-        fd.set('userId', entry.userId)
-        fd.set('questionId', qid)
-        fd.set('selectedIndex', String(idx))
-        await saveQuizResponseAction(null, fd)
-    }
-
-    async function onSubmit() {
-        if (submittedRef.current) return
-        setSubmitting(true)
-        try {
-            if (entry.mode === 'quiz') {
-                const fd = new FormData(); fd.set('userId', entry.userId)
-                await submitQuizAction(null, fd)
-            } else {
-                const fd = new FormData()
-                fd.set('userId', entry.userId)
-                fd.set('content', essayRef.current?.value || '')
-                await submitEssayAction(null, fd)
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) e.preventDefault();
+            if (e.key?.toLowerCase() === 'printscreen') {
+                setPopup({
+                    open: true,
+                    title: 'Nội dung tạm ẩn',
+                    message: 'Bạn vừa thao tác chụp màn hình. Nhấn tiếp tục để làm bài.'
+                });
             }
-            submittedRef.current = true
-            router.replace('/thi')
-        } catch {
-            // giữ yên trang nếu lỗi
-        } finally {
-            setSubmitting(false)
-        }
-    }
+        };
+        const onVis = () => {
+            if (document.hidden) {
+                setViolations(v => {
+                    const nv = v + 1;
+                    const left = Math.max(0, MAX_TAB_VIOLATIONS - nv);
+                    setPopup({
+                        open: true,
+                        title: 'Cảnh báo chuyển tab',
+                        message: nv <= MAX_TAB_VIOLATIONS
+                            ? `Phát hiện chuyển tab (${nv}/${MAX_TAB_VIOLATIONS}). Còn ${left} lần trước khi tự động nộp.`
+                            : 'Bạn đã vượt quá số lần cho phép. Hệ thống sẽ tự động nộp bài.'
+                    });
+                    if (nv > MAX_TAB_VIOLATIONS && !autoSubmitRef.current) {
+                        autoSubmitRef.current = true;
+                        run(submitQuiz, [{ userId }], {
+                            onSuccess: () => router.replace('/thi'),
+                            successMessage: 'Đã tự động nộp bài do vi phạm chuyển tab quá số lần cho phép.',
+                            toast: false,
+                        });
+                    }
+                    return nv;
+                });
+            }
+        };
+        const onFsChange = () => setFsRequired(!document.fullscreenElement);
 
-    const deadlineText = entry.deadline
-        ? new Date(entry.deadline).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' })
-        : '—'
+        document.addEventListener('copy', onCopy);
+        document.addEventListener('contextmenu', onCtx);
+        document.addEventListener('keydown', onKey);
+        document.addEventListener('visibilitychange', onVis);
+        document.addEventListener('fullscreenchange', onFsChange);
+
+        const onUnload = () => { try { navigator.sendBeacon('/api/exam/auto-submit'); } catch { } };
+        window.addEventListener('beforeunload', onUnload);
+
+        return () => {
+            document.removeEventListener('copy', onCopy);
+            document.removeEventListener('contextmenu', onCtx);
+            document.removeEventListener('keydown', onKey);
+            document.removeEventListener('visibilitychange', onVis);
+            document.removeEventListener('fullscreenchange', onFsChange);
+            window.removeEventListener('beforeunload', onUnload);
+        };
+    }, [run, router, userId]);
+
+    const timeLeftSec = endsAt ? Math.max(0, Math.floor((endsAt.getTime() - now.getTime()) / 1000)) : 0;
+    const mm = String(Math.floor(timeLeftSec / 60)).padStart(2, '0');
+    const ss = String(timeLeftSec % 60).padStart(2, '0');
+
+    const answeredCount = Array.from(answers.values()).filter(v => typeof v === 'number').length;
+
+    const choose = (qid, selectedIndex) => {
+        setAnswers(m => {
+            const mm = new Map(m);
+            mm.set(qid, selectedIndex);
+            return mm;
+        });
+        run(recordQuizResponse, [{ userId, questionId: qid, selectedIndex }], {
+            toast: false, overlay: false, autoRefresh: false, silent: true,
+        });
+    };
+
+    const goPrev = () => setIdx(i => Math.max(0, i - 1));
+    const goNext = () => setIdx(i => Math.min(total - 1, i + 1));
+    const jumpTo = (i) => setIdx(Math.min(Math.max(0, i), total - 1));
 
     return (
-        <div className="min-h-screen select-none bg-slate-50 p-4 md:p-6">
-            <div className="mx-auto w-full max-w-5xl">
-                {/* Header nhỏ */}
-                <div className="mb-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-slate-200">
-                            {entry.mode === 'quiz' ? <FileText className="h-5 w-5 text-slate-700" /> : <PenSquare className="h-5 w-5 text-slate-700" />}
-                        </span>
-                        <div>
-                            <div className="text-lg font-semibold text-slate-900">
-                                {entry.mode === 'quiz' ? 'Bài thi Trắc nghiệm' : 'Bài thi Tự luận'}
+        <main className="relative min-h-screen bg-[var(--surface-2,#f8fafc)] md:pb-0 pb-24 flex justify-center items-center">
+            <div className="h-full max-w-6xl px-3 sm:px-4 md:px-6 py-4 md:py-6">
+                {/* Grid: content + right panel */}
+                <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+                    {/* Question card */}
+                    <section className="info-card md:p-6">
+                        {/* Header row */}
+                        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="text-sm text-slate-600">
+                                Câu <b className="tabular-nums">{idx + 1}</b>/<span className="tabular-nums">{total}</span>
+                                <span className="mx-2 hidden sm:inline">•</span>
+                                <span className="sm:inline hidden">Đã trả lời <b className="tabular-nums">{answeredCount}</b></span>
                             </div>
-                            <div className="text-xs text-slate-500">Hạn chót: {deadlineText}</div>
-                        </div>
-                    </div>
-                    {entry.mode === 'quiz' && (
-                        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800">
-                            <div className="flex items-center gap-2">
-                                <Clock className="h-4 w-4 text-slate-500" />
-                                <span>Thời gian còn lại: {endAtISO ? fmtCountdown(timeLeft) : `${entry.durationMinutes}:00`}</span>
+                            <div className="text-xs text-slate-500">
+                                Vi phạm chuyển tab: <b className="tabular-nums">{violations}</b>/{MAX_TAB_VIOLATIONS}
                             </div>
                         </div>
-                    )}
-                </div>
 
-                {/* Quy định */}
-                <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                    <div className="mb-1 font-semibold">Quy định phòng thi</div>
-                    <ul className="list-inside list-disc space-y-1">
-                        <li>Không sao chép nội dung, không chụp màn hình dưới mọi hình thức.</li>
-                        <li>Nếu thoát trang/tắt trình duyệt, hệ thống sẽ <b>nộp bài ngay</b> cho lượt thi này.</li>
-                        <li>Trắc nghiệm có giới hạn thời gian; tự luận không có đếm giờ.</li>
-                    </ul>
-                </div>
-
-                {error && (
-                    <div className="mb-4 inline-flex items-center gap-2 rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                        <ShieldAlert className="h-4 w-4" /> {error}
-                    </div>
-                )}
-
-                {/* Nội dung */}
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                    {entry.mode === 'quiz' ? (
-                        !started ? (
-                            <div className="text-center">
-                                <p className="mb-4 text-slate-700">
-                                    Bấm &quot;Bắt đầu&quot; để vào làm bài. Thời gian: {entry.durationMinutes} phút.
-                                </p>
-                                <button type="button" onClick={onStartQuiz} className="btn-brand px-6">Bắt đầu</button>
+                        {/* Question body — GIỮ CHIỀU CAO CỐ ĐỊNH */}
+                        <article
+                            ref={panelRef}
+                            className="rounded-xl ring-1 ring-black/5 border border-black/5 p-4 md:p-5"
+                            style={{ minHeight: panelMinH }}
+                        >
+                            <h2 className="mb-4 font-medium leading-6">Câu {idx + 1}. {active.text}</h2>
+                            <div className="grid gap-1">
+                                {active.choices.map((c, ci) => {
+                                    const checked = answers.get(active.id) === ci;
+                                    return (
+                                        <label
+                                            key={ci}
+                                            className={[
+                                                'group flex items-start gap-3 rounded-xl p-3 cursor-pointer transition',
+                                                'bg-white/70 hover:bg-slate-50 ring-1 ring-transparent',
+                                                checked ? 'ring-2 ring-brand bg-brand/5' : ''
+                                            ].join(' ')}
+                                        >
+                                            <input
+                                                type="radio"
+                                                name={`q_${active.id}`}
+                                                className="mt-1"
+                                                checked={checked || false}
+                                                onChange={() => choose(active.id, ci)}
+                                            />
+                                            <span className="text-sm leading-6">{c}</span>
+                                        </label>
+                                    );
+                                })}
                             </div>
-                        ) : (
-                            <div className="space-y-4">
-                                {entry.pack.map((q) => (
-                                    <div key={q.questionId} className="rounded-lg border border-slate-200 p-3">
-                                        <div className="mb-2 text-sm font-semibold text-slate-800">
-                                            {q.idx}. {q.text}
-                                        </div>
-                                        <div className="grid gap-2">
-                                            {q.choices.map((ch, i) => {
-                                                const sel = answers[q.questionId] === i
-                                                return (
-                                                    <label key={i} className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm transition ${sel ? 'border-brand/60 bg-brand/5' : 'border-slate-200 hover:bg-slate-50'}`}>
-                                                        <input
-                                                            type="radio"
-                                                            name={q.questionId}
-                                                            className="accent-brand"
-                                                            checked={sel || false}
-                                                            onChange={() => onChangeAnswer(q.questionId, i)}
-                                                        />
-                                                        <span className="select-text">{ch}</span>
-                                                    </label>
-                                                )
-                                            })}
-                                        </div>
-                                    </div>
-                                ))}
+                        </article>
 
-                                <div className="flex justify-end pt-2">
-                                    <button onClick={onSubmit} disabled={submitting} className="btn-brand px-6">
-                                        {submitting ? 'Đang nộp…' : 'Nộp bài'}
-                                    </button>
-                                </div>
-                            </div>
-                        )
-                    ) : (
-                        <div>
-                            <label className="mb-2 block text-sm font-medium text-slate-700">
-                                Bài làm (tối đa ~3000 từ)
-                            </label>
-                            <textarea ref={essayRef} className="inp h-64 select-text" placeholder="Nhập bài tự luận của bạn…" />
-                            <div className="mt-4 flex justify-end">
-                                <button onClick={onSubmit} disabled={submitting} className="btn-brand px-6">
-                                    {submitting ? 'Đang nộp…' : 'Nộp bài'}
+                        {/* Navigation buttons */}
+                        <div className="mt-4 flex items-center justify-between gap-3">
+                            <button onClick={goPrev} disabled={idx === 0} className="btn-outline disabled:opacity-50">
+                                ← Câu trước
+                            </button>
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={() => {
+                                        run(submitQuiz, [{ userId }], {
+                                            onSuccess: () => router.replace('/thi'),
+                                            successMessage: 'Đã nộp bài trắc nghiệm.',
+                                        });
+                                    }}
+                                    className="btn-brand"
+                                >
+                                    Nộp bài
+                                </button>
+                                <button onClick={goNext} disabled={idx === total - 1} className="btn-outline disabled:opacity-50">
+                                    Câu tiếp →
                                 </button>
                             </div>
                         </div>
-                    )}
+                    </section>
+
+                    {/* Right sticky panel (desktop / tablet) */}
+                    <aside className="hidden md:block md:sticky md:top-4">
+                        <div className="info-card p-4 md:p-5 h-full">
+                            {/* Timer */}
+                            <div className="flex items-center justify-between">
+                                <div className="text-sm font-semibold">Thời gian còn lại</div>
+                                <div className="rounded-md ring-1 ring-black/10 px-2 py-1 text-sm tabular-nums">
+                                    {mm}:{ss}
+                                </div>
+                            </div>
+
+                            {/* Submit */}
+                            <div className="mt-3 flex items-center gap-2">
+                                <button
+                                    onClick={() => {
+                                        run(submitQuiz, [{ userId }], {
+                                            onSuccess: () => router.replace('/thi'),
+                                            successMessage: 'Đã nộp bài trắc nghiệm.',
+                                        });
+                                    }}
+                                    className="btn-brand flex-1"
+                                >
+                                    Nộp bài
+                                </button>
+                            </div>
+
+                            {/* Grid question numbers */}
+                            <div className="mt-5">
+                                <div className="mb-2 text-sm font-semibold">Bảng câu hỏi</div>
+                                <div className="grid grid-cols-5 gap-2">
+                                    {data.questions.map((q, i) => {
+                                        const isAnswered = answers.has(q.id);
+                                        const isActive = i === idx;
+                                        return (
+                                            <button
+                                                key={q.id}
+                                                onClick={() => jumpTo(i)}
+                                                className={[
+                                                    'h-9 rounded-md text-sm font-medium ring-1 transition',
+                                                    isActive
+                                                        ? 'bg-brand text-white ring-brand'
+                                                        : isAnswered
+                                                            ? 'bg-brand/10 text-brand ring-brand/30'
+                                                            : 'ring-slate-300 hover:bg-slate-50'
+                                                ].join(' ')}
+                                                title={isAnswered ? 'Đã trả lời' : 'Chưa trả lời'}
+                                            >
+                                                {i + 1}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                            <div className="py-2">
+                                <p className="mt-4 text-xs text-slate-500">
+                                    Chú ý: Chuyển tab quá nhiều lần sẽ bị hệ thống coi là gian lận và tự động nộp bài.
+                                </p>
+                            </div>
+                        </div>
+                    </aside>
                 </div>
 
-                <div className="mx-auto mt-6 text-center text-sm text-slate-500">
-                    <Link href="/thi" className="underline">Quay lại Trang thi</Link>
+                {/* Hidden sizer để đo chiều cao tối đa theo width thực tế */}
+                <div
+                    ref={sizerRef}
+                    className="absolute -left-[9999px] -top-[9999px]"
+                    style={{ width: panelWidth || 800 }}
+                    aria-hidden="true"
+                >
+                    {data.questions.map((q, i) => (
+                        <div key={q.id} data-sizer-item className="rounded-xl ring-1 ring-black/5 border border-black/5 p-5 mb-4">
+                            <div className="mb-4 font-medium leading-6">Câu {i + 1}. {q.text}</div>
+                            <div className="grid gap-2">
+                                {q.choices.map((_, ci) => (
+                                    <div key={ci} className="rounded-xl p-3 bg-white/70" />
+                                ))}
+                            </div>
+                        </div>
+                    ))}
                 </div>
             </div>
-        </div>
-    )
+
+            {/* Bottom bar (mobile) */}
+            <div className="md:hidden fixed inset-x-0 bottom-0 z-30 border-t bg-white/95 backdrop-blur px-3 py-2">
+                <div className="mx-auto max-w-6xl">
+                    <div className="mb-2 flex items-center justify-between">
+                        <div className="rounded-md ring-1 ring-black/10 px-2 py-1 text-sm tabular-nums">{mm}:{ss}</div>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => {
+                                    run(submitQuiz, [{ userId }], {
+                                        onSuccess: () => router.replace('/thi'),
+                                        successMessage: 'Đã nộp bài trắc nghiệm.',
+                                    });
+                                }}
+                                className="btn-brand px-4 py-1.5"
+                            >
+                                Nộp bài
+                            </button>
+                            <button onClick={goNext} disabled={idx === total - 1} className="btn-outline px-3 py-1.5 disabled:opacity-50">→</button>
+                        </div>
+                    </div>
+                    <div className="flex gap-2 overflow-x-auto pb-1">
+                        {data.questions.map((q, i) => {
+                            const isAnswered = answers.has(q.id);
+                            const isActive = i === idx;
+                            return (
+                                <button
+                                    key={q.id}
+                                    onClick={() => jumpTo(i)}
+                                    className={[
+                                        'min-w-9 h-9 px-2 rounded-md text-sm font-medium ring-1',
+                                        isActive
+                                            ? 'bg-brand text-white ring-brand'
+                                            : isAnswered
+                                                ? 'bg-brand/10 text-brand ring-brand/30'
+                                                : 'ring-slate-300'
+                                    ].join(' ')}
+                                >
+                                    {i + 1}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+
+            {/* Fullscreen required gate */}
+            {fsRequired && (
+                <div className="fixed inset-0 z-[100] grid place-items-center bg-white/90 backdrop-blur-sm">
+                    <div className="max-w-md rounded-2xl border p-6 shadow-lg text-center bg-white">
+                        <h2 className="text-lg font-semibold">Vui lòng bật Toàn màn hình</h2>
+                        <p className="mt-2 text-sm text-slate-600">
+                            Để đảm bảo trải nghiệm và công bằng, chế độ toàn màn hình là bắt buộc trong suốt quá trình làm bài.
+                        </p>
+                        <button
+                            className="btn-brand mt-4"
+                            onClick={async () => {
+                                try { await document.documentElement.requestFullscreen(); } catch { }
+                                // trạng thái cập nhật bởi fullscreenchange
+                            }}
+                        >
+                            Bật Toàn màn hình
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Popup cảnh báo trung tâm */}
+            {popup.open && !fsRequired && (
+                <div className="fixed inset-0 z-[95] grid place-items-center bg-black/20 backdrop-blur-[2px]">
+                    <div className="max-w-md rounded-2xl border bg-white p-6 text-center shadow-xl">
+                        <h2 className="text-lg font-semibold">{popup.title || 'Thông báo'}</h2>
+                        <p className="mt-2 text-sm text-slate-600">{popup.message}</p>
+                        <button className="btn-brand mt-4" onClick={() => setPopup(p => ({ ...p, open: false }))}>
+                            Tiếp tục làm bài
+                        </button>
+                    </div>
+                </div>
+            )}
+        </main>
+    );
+}
+
+/* =========================
+ * ESSAY
+ * ========================= */
+function EssayForm({ userId, defaultValue, disabled }) {
+    const router = useRouter();
+    const { run } = useActionFeedback();
+    const [content, setContent] = useState(defaultValue || '');
+    useEffect(() => { setContent(defaultValue || ''); }, [defaultValue]);
+
+    return (
+        <form
+            onSubmit={(e) => {
+                e.preventDefault();
+                run(submitEssay, [{ userId, content }], {
+                    successMessage: 'Đã lưu/chốt phiên bản bài tự luận.',
+                    onSuccess: () => {
+                        // chờ 1s rồi về /thi
+                        setTimeout(() => router.replace('/thi'), 1000);
+                    },
+                });
+            }}
+            className="mt-4 space-y-4"
+        >
+            <div className="info-card">
+                <div className="border-b px-4 py-2 text-xs text-slate-500">Soạn bài (tối đa 3000 ký tự)</div>
+                <textarea
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    disabled={disabled}
+                    placeholder="Viết bài (≤ 3000 ký tự)…"
+                    rows={14}
+                    className="w-full rounded-b-2xl p-4 outline-none"
+                    style={{ resize: 'vertical' }}
+                />
+            </div>
+            <div className="flex items-center gap-3">
+                <button disabled={disabled || !content.trim()} className="btn-brand disabled:opacity-60">
+                    Lưu / Nộp phiên bản
+                </button>
+                {disabled && <span className="text-sm text-slate-600">Bạn đã hết lượt chỉnh sửa/nộp.</span>}
+            </div>
+        </form>
+    );
 }

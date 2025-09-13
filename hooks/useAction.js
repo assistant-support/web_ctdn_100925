@@ -190,7 +190,7 @@ function showToastDom({ message, type = 'success', duration = 2500 }) {
 
     if (duration > 0) setTimeout(close, duration + 40);
 }
-
+export { showOverlay, hideOverlay };
 /* =========================
  * Hook
  * ========================= */

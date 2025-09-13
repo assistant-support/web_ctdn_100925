@@ -2,6 +2,7 @@
 import { getExamDashboard } from './actions'
 import Link from 'next/link'
 import { FileText, PenSquare, ShieldAlert, Timer } from 'lucide-react'
+import { getSession } from '@/app/session'
 
 function fmt(dt) {
     if (!dt) return 'Chưa có'
@@ -56,6 +57,11 @@ function Card({ icon: Icon, title, subtitle, children, footer }) {
 }
 
 export default async function Page() {
+    const auth = await getSession()
+    if (!auth) {
+        return (<p>Bạn không có quyền truy cập trang này</p>)
+    }
+
     const data = await getExamDashboard()
 
     const quizDisabled = !data.quiz.canStart
