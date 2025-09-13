@@ -7,4 +7,5 @@ export default {
             { protocol: "https", hostname: "vietnamtimes.thoidai.com.vn", pathname: "/**" }
         ],
     },
+    output: "standalone",
 };
