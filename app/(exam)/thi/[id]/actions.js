@@ -22,7 +22,7 @@ async function requireSameUser(userId) {
 }
 
 /* =========================================================
- * Utilities: shuffle, mapping, time, scoring
+ * Utilities: shuffle, mapping, scoring (đÃ BỎ getEndsAt cho quiz)
  * =======================================================*/
 function shuffleArray(arr) {
     const a = arr.slice();
@@ -37,16 +37,6 @@ function makeChoiceOrder(n = 4) {
 }
 function applyChoiceOrder(choices, order) {
     return order.map((originalIdx) => choices[originalIdx]);
-}
-function getEndsAt({ startedAt, cfgDeadline, durationMinutes }) {
-    if (!startedAt) return null;
-    const endsByDuration = new Date(
-        startedAt.getTime() + Math.max(1, durationMinutes) * 60 * 1000
-    );
-    if (cfgDeadline && cfgDeadline instanceof Date && !isNaN(cfgDeadline.getTime())) {
-        return new Date(Math.min(endsByDuration.getTime(), cfgDeadline.getTime()));
-    }
-    return endsByDuration;
 }
 function computeQuizScore({ questionIds, choiceOrders, responses }) {
     const points = QUIZ.pointsPerCorrect || 1;
@@ -293,12 +283,6 @@ export async function getExamEntry({ userId, mode }) {
         }
 
         if (qz.status === 'in_progress' && qz.startedAt) {
-            const endsAt = getEndsAt({
-                startedAt: new Date(qz.startedAt),
-                cfgDeadline: cfg.quiz.deadline,
-                durationMinutes: cfg.quiz.durationMinutes,
-            });
-
             const byId = new Map(QUIZ.questions.map((q) => [q.id, q]));
             const orderByQ = new Map((qz.choiceOrders || []).map((co) => [co.questionId, co.order]));
             const questions = (qz.questionIds || [])
@@ -317,7 +301,7 @@ export async function getExamEntry({ userId, mode }) {
                 quiz: {
                     questions,
                     responses: qz.responses || [],
-                    endsAtISO: endsAt ? endsAt.toISOString() : null,
+                    // endsAtISO: đã loại bỏ theo yêu cầu bỏ thời gian
                 },
             };
         }
@@ -329,8 +313,9 @@ export async function getExamEntry({ userId, mode }) {
             mode: 'quiz',
             config: {
                 perAttemptCount: QUIZ.perAttemptCount,
-                durationMinutes: cfg.quiz.durationMinutes,
-                deadlineISO: cfg.quiz.deadline ? cfg.quiz.deadline.toISOString() : null,
+                // Bỏ thông số thời gian cho quiz
+                durationMinutes: null,
+                deadlineISO: null,
             },
         };
     }
@@ -357,7 +342,7 @@ export async function getExamEntry({ userId, mode }) {
     };
 }
 
-/** Bắt đầu quiz: chọn câu, trộn đáp án, set thời gian */
+/** Bắt đầu quiz: chọn câu, trộn đáp án */
 export async function startQuiz({ userId }) {
     const gate = await requireSameUser(userId);
     if (!gate.ok) return gate;
@@ -396,29 +381,25 @@ export async function heartbeatQuiz({ userId }) {
     return { ok: true };
 }
 
-/** Lưu từng đáp án */
+/** Lưu từng đáp án (không còn auto-submit theo thời gian) */
 export async function recordQuizResponse({ userId, questionId, selectedIndex }) {
     const gate = await requireSameUser(userId);
     if (!gate.ok) return gate;
 
     await connectDB();
-    const cfg = getExamConfig();
     const acc = await Account.findById(userId);
     if (!acc) return { ok: false, error: 'Không tìm thấy tài khoản.' };
 
     const qz = acc.exam?.quiz;
-    if (!qz || qz.status !== 'in_progress') return { ok: false, error: 'Bài thi chưa bắt đầu hoặc đã kết thúc.' };
-
-    const endsAt = getEndsAt({
-        startedAt: new Date(qz.startedAt),
-        cfgDeadline: cfg.quiz.deadline,
-        durationMinutes: cfg.quiz.durationMinutes,
-    });
-    if (endsAt && new Date() >= endsAt) {
-        return await submitQuiz({ userId });
+    if (!qz || qz.status !== 'in_progress') {
+        return { ok: false, error: 'Bài thi chưa bắt đầu hoặc đã kết thúc.' };
     }
 
-    if (typeof selectedIndex !== 'number' || selectedIndex < 0 || selectedIndex > 3) {
+    // Xác định độ dài đáp án thật theo order của câu này
+    const co = (qz.choiceOrders || []).find((x) => x.questionId === questionId);
+    const maxChoiceIndex = ((co?.order?.length ?? 4) - 1);
+
+    if (typeof selectedIndex !== 'number' || selectedIndex < 0 || selectedIndex > maxChoiceIndex) {
         return { ok: false, error: 'Chỉ số đáp án không hợp lệ.' };
     }
     if (!qz.questionIds?.includes?.(questionId)) {
@@ -482,11 +463,7 @@ export async function submitQuiz({ userId }) {
     return { ok: true };
 }
 
-/** Nộp/lưu tự luận:
- *  - Lưu MongoDB trước
- *  - Nếu content.length > 1500 ký tự → upsert GSheet (append hoặc ghi đè theo Email+CCCD)
- *  - GSheet chạy background để phản hồi nhanh
- */
+/** Nộp/lưu tự luận (giữ nguyên deadline/attempt) */
 export async function submitEssay({ userId, content }) {
     const gate = await requireSameUser(userId);
     if (!gate.ok) return gate;
@@ -543,26 +520,17 @@ export async function submitEssay({ userId, content }) {
     return { ok: true };
 }
 
-/** Hỗ trợ API /finalize: auto-submit khi quá hạn (được route khác gọi) */
+/** Hỗ trợ API /finalize: sau cập nhật không auto-submit theo thời gian nữa */
 export async function finalizeQuizIfNeededFor(userId) {
     await connectDB();
     const acc = await Account.findById(userId);
     if (!acc) return { ok: false, error: 'Không tìm thấy tài khoản.' };
 
-    const cfg = getExamConfig();
     const qz = acc.exam?.quiz;
-    if (!qz || qz.status !== 'in_progress' || !qz.startedAt) return { ok: true, skipped: true };
-
-    const endsAt = getEndsAt({
-        startedAt: new Date(qz.startedAt),
-        cfgDeadline: cfg.quiz.deadline,
-        durationMinutes: cfg.quiz.durationMinutes,
-    });
-
-    if (endsAt && new Date() >= endsAt) {
-        // Tận dụng submitQuiz để chấm & sync
-        return await submitQuiz({ userId: String(acc._id) });
+    if (!qz || qz.status !== 'in_progress' || !qz.startedAt) {
+        return { ok: true, skipped: true };
     }
 
+    // BỎ kiểm tra thời gian; không tự động nộp nữa
     return { ok: true, skipped: true };
 }

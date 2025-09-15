@@ -45,15 +45,15 @@ export default async function Page({ params, searchParams }) {
                     <section className="info-card md:p-7 ring-brand/20">
                         <h2 className="text-lg font-semibold tracking-tight text-slate-900">Quy định làm bài</h2>
                         <ul className="mt-4 space-y-2 text-sm leading-6 text-slate-700">
-                            <li className="flex items-start gap-3"><span className="mt-1">{Check}</span>Mỗi thí sinh chỉ được làm <b className="tabular-nums">01</b> phần trắc nghiệm.</li>
-                            <li className="flex items-start gap-3"><span className="mt-1">{Check}</span>Thời lượng <b className="tabular-nums">{config.durationMinutes} phút</b> kể từ lúc xác nhận bắt đầu.</li>
-                            <li className="flex items-start gap-3"><span className="mt-1">{Check}</span>Gồm <b className="tabular-nums">{config.perAttemptCount}</b> câu hỏi, chọn <b>01</b> đáp án đúng nhất cho mỗi câu.</li>
+                            <li className="flex items-start gap-2"><span className="mt-1">{Check}</span>Mỗi thí sinh chỉ được làm <b className="tabular-nums">01</b> lần thi trắc nhiệm.</li>
+                            <li className="flex items-start gap-2"><span className="mt-1">{Check}</span>
+                            Không giới hạn thời gian làm bài nhưng không được tắt hoặc chuyển tab trong quá trình thi.</li>
+                            <li className="flex items-start gap-2"><span className="mt-1">{Check}</span>Gồm <b className="tabular-nums">{config.perAttemptCount}</b> câu hỏi, chọn <b>01</b> đáp án đúng nhất cho mỗi câu.</li>
                             {config.deadlineISO && (
-                                <li className="flex items-start gap-3">
+                                <li className="flex items-start gap-2">
                                     <span className="mt-1">{Check}</span>Hạn chót hệ thống: <b>{deadlineStr}</b> (GMT+7).
                                 </li>
                             )}
-                            <li className="flex items-start gap-3"><span className="mt-1">{Check}</span>Hết giờ hoặc thoát giữa chừng, hệ thống sẽ <b className="text-brand">tự động nộp</b> bài hiện có.</li>
                         </ul>
 
                         <form action={startAndGo} className="mt-6 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">

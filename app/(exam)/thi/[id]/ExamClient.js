@@ -61,7 +61,7 @@ function QuizScreen({ userId, data }) {
     const { run } = useActionFeedback();
 
     const MAX_TAB_VIOLATIONS = 3;           // cho phép 3 lần; lần thứ 4 auto-submit
-    const autoSubmitRef = useRef(false);     // chống submit trùng
+    const autoSubmitRef = useRef(false);    // chống submit trùng
 
     const total = data.questions.length;
     const [answers, setAnswers] = useState(
@@ -73,11 +73,12 @@ function QuizScreen({ userId, data }) {
     });
     const active = data.questions[idx];
 
-    const endsAt = useMemo(() => (data.endsAtISO ? new Date(data.endsAtISO) : null), [data.endsAtISO]);
-    const [now, setNow] = useState(() => new Date());
+    // ⛔️ BỎ ĐẾM GIỜ: không dùng endsAt/now/mm/ss
 
     // Fullscreen gate
-    const [fsRequired, setFsRequired] = useState(() => (typeof document !== 'undefined' && !document.fullscreenElement));
+    const [fsRequired, setFsRequired] = useState(
+        () => (typeof document !== 'undefined' && !document.fullscreenElement)
+    );
 
     // Popup trung tâm (chuyển tab/printscreen)
     const [popup, setPopup] = useState({ open: false, title: '', message: '' });
@@ -110,22 +111,13 @@ function QuizScreen({ userId, data }) {
         if (maxH) setPanelMinH(maxH);
     }, [panelWidth, data.questions]);
 
-    // Tick + heartbeat
+    // Giữ heartbeat (bỏ tick đếm giây)
     useEffect(() => {
-        const t = setInterval(() => setNow(new Date()), 1000);
         const hb = setInterval(() => { heartbeatQuiz({ userId }); }, 15000);
-        return () => { clearInterval(t); clearInterval(hb); };
+        return () => { clearInterval(hb); };
     }, [userId]);
 
-    // Hết thời gian -> tự nộp
-    useEffect(() => {
-        if (endsAt && now >= endsAt) {
-            run(submitQuiz, [{ userId }], {
-                onSuccess: () => router.replace('/thi'),
-                successMessage: 'Đã tự động nộp bài khi hết thời gian.',
-            });
-        }
-    }, [now, endsAt, run, router, userId]);
+    // ⛔️ BỎ: Hết thời gian -> tự nộp (không còn)
 
     // Anti-copy + phát hiện chuyển tab + theo dõi fullscreen
     useEffect(() => {
@@ -133,7 +125,7 @@ function QuizScreen({ userId, data }) {
         const onCtx = (e) => { e.preventDefault(); };
         const onKey = (e) => {
             if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) e.preventDefault();
-            if (e.key?.toLowerCase() === 'printscreen') {
+            if (e.key && e.key.toLowerCase && e.key.toLowerCase() === 'printscreen') {
                 setPopup({
                     open: true,
                     title: 'Nội dung tạm ẩn',
@@ -185,10 +177,6 @@ function QuizScreen({ userId, data }) {
             window.removeEventListener('beforeunload', onUnload);
         };
     }, [run, router, userId]);
-
-    const timeLeftSec = endsAt ? Math.max(0, Math.floor((endsAt.getTime() - now.getTime()) / 1000)) : 0;
-    const mm = String(Math.floor(timeLeftSec / 60)).padStart(2, '0');
-    const ss = String(timeLeftSec % 60).padStart(2, '0');
 
     const answeredCount = Array.from(answers.values()).filter(v => typeof v === 'number').length;
 
@@ -286,13 +274,6 @@ function QuizScreen({ userId, data }) {
                     {/* Right sticky panel (desktop / tablet) */}
                     <aside className="hidden md:block md:sticky md:top-4">
                         <div className="info-card p-4 md:p-5 h-full">
-                            {/* Timer */}
-                            <div className="flex items-center justify-between">
-                                <div className="text-sm font-semibold">Thời gian còn lại</div>
-                                <div className="rounded-md ring-1 ring-black/10 px-2 py-1 text-sm tabular-nums">
-                                    {mm}:{ss}
-                                </div>
-                            </div>
 
                             {/* Submit */}
                             <div className="mt-3 flex items-center gap-2">
@@ -365,11 +346,10 @@ function QuizScreen({ userId, data }) {
                 </div>
             </div>
 
-            {/* Bottom bar (mobile) */}
+            {/* Bottom bar (mobile) — bỏ đồng hồ */}
             <div className="md:hidden fixed inset-x-0 bottom-0 z-30 border-t bg-white/95 backdrop-blur px-3 py-2">
                 <div className="mx-auto max-w-6xl">
-                    <div className="mb-2 flex items-center justify-between">
-                        <div className="rounded-md ring-1 ring-black/10 px-2 py-1 text-sm tabular-nums">{mm}:{ss}</div>
+                    <div className="mb-2 flex items-center justify-end">
                         <div className="flex items-center gap-2">
                             <button
                                 onClick={() => {
@@ -422,7 +402,6 @@ function QuizScreen({ userId, data }) {
                             className="btn-brand mt-4"
                             onClick={async () => {
                                 try { await document.documentElement.requestFullscreen(); } catch { }
-                                // trạng thái cập nhật bởi fullscreenchange
                             }}
                         >
                             Bật Toàn màn hình
@@ -446,6 +425,8 @@ function QuizScreen({ userId, data }) {
         </main>
     );
 }
+
+
 
 /* =========================
  * ESSAY
