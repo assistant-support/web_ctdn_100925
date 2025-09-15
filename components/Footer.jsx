@@ -1,4 +1,3 @@
-// components/Footer.jsx
 import Image from "next/image";
 import Link from "next/link";
 import { Info, Mail, Phone, Users } from "lucide-react";
